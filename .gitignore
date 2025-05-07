@@ -50,3 +50,30 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Arquivos de cache e build
+node_modules/
+dist/
+build/
+out/
+lib/
+
+# Arquivos de configuração
+tsconfig.json
+package.json
+package-lock.json
+yarn.lock
+
+# Arquivos de logs
+*.log
+*.tmp
+
+# Arquivos de IDE
+*.user.js
+*.iml
+*.idea/
+
+# Outros arquivos
+*.swp
+__pycache__
+# Adicionar outros arquivos ou pastas conforme necessário
