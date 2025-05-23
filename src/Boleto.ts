@@ -9,6 +9,7 @@ export class Boleto {
   public bankName: string;             // Nome do Banco (Apenas os mais conhecidos)
   public currencyCode: string;         // Código da Moeda
   public dueDate: Date;                // Data de vencimento (formato ISO ou 'YYYY-MM-DD')
+  public newDueDate: Date;             // Data de vencimento (formato ISO ou 'YYYY-MM-DD') Novo fator Febraban
   public amount: number;               // Valor do boleto
   public agreementNumber: string;      // Número do Convênio fornecido pelo Banco
   public ourNumberComplement: string;  // Complemento do Nosso Número
@@ -30,6 +31,7 @@ export class Boleto {
     this.bankName = "";
     this.currencyCode = "";
     this.dueDate = new Date();
+    this.newDueDate = new Date();
     this.amount = 0;
     this.agreementNumber = "";
     this.ourNumberComplement = "";
@@ -55,6 +57,18 @@ export class Boleto {
     } else {
       this.errorMessage = "Tamanho do número não é compativel com nenhum documento previsto!";
       return false;
+    }
+  }
+
+  public getNearestDueDate(): Date{
+    const currentDate = new Date();
+    const diffDueDate = Math.abs(currentDate.getTime() - this.dueDate.getTime());
+    const diffNewDueDate = Math.abs(currentDate.getTime() - this.newDueDate.getTime());
+
+    if (diffDueDate > diffNewDueDate) {
+      return this.newDueDate
+    } else {
+      return this.dueDate
     }
   }
 
@@ -94,7 +108,8 @@ export class Boleto {
     this.bankCode = this.digitableLine.slice(0,3);
     this.bankName = this.getBankName(parseInt(this.bankCode, 10))
     this.currencyCode = this.digitableLine[3];
-    this.dueDate = this.getDueDateForNewFactor(parseInt(this.digitableLine.slice(33,37), 10))
+    this.dueDate = this.getDueDateByFactor(parseInt(this.digitableLine.slice(33,37), 10))
+    this.newDueDate = this.getDueDateByNewFactor(parseInt(this.digitableLine.slice(33,37), 10))
     this.amount = this.getAmount(this.digitableLine.slice(37));
     this.agreementNumber = this.barcode.slice(19,23);
     this.ourNumberComplement = this.barcode.slice(23,30);
@@ -104,10 +119,9 @@ export class Boleto {
   }
 
   private loadConvenioInfo(): void{    
-    this.amount = this.getAmount(this.digitableLine.slice(4,15), this.digitableLine[2]);    
+    this.amount = this.getAmount(this.barcode.slice(4,15), this.digitableLine[2]);    
     this.segmentCode = this.digitableLine[1];
-    this.segmentName = this.getSegmentName(parseInt(this.segmentCode, 10));
-    this.dueDate = new Date()
+    this.segmentName = this.getSegmentName(parseInt(this.segmentCode, 10));    
     this.companyIdentifier = this.digitableLine.slice(15,44);   
   }
 
@@ -146,19 +160,21 @@ export class Boleto {
     return true;
   }
 
-  private getDueDateForNewFactor(dueDateFactor: number): Date {    
-
+  private getDueDateByFactor(dueDateFactor: number): Date {
     if (isNaN(dueDateFactor) || dueDateFactor === 0) {
       return new Date();
     }
+    let baseDate = new Date(1997, 9, 7); // 07/10/1997 -> Antigo fator Febraban 
+    baseDate.setDate(baseDate.getDate() + dueDateFactor);      
+    return baseDate;
+  }
 
-    let baseDate = new Date(1997, 9, 7); // 07/10/1997 -> Antigo fator Febraban
-
-    if (dueDateFactor > 1000) {
-      baseDate = new Date(2025, 1, 22); // 22/02/2025 -> Novo fator Febraban  
-      dueDateFactor = dueDateFactor - 1000; // Calcula a data de vencimento, subtraindo 1000 do fator 
+  private getDueDateByNewFactor(dueDateFactor: number): Date {
+    if (isNaN(dueDateFactor) || dueDateFactor === 0) {
+      return new Date();
     }
-  
+    let  baseDate = new Date(2025, 1, 22); // 22/02/2025 -> Novo fator Febraban  
+    dueDateFactor = dueDateFactor - 1000; // Calcula a data de vencimento, subtraindo 1000 do fator
     baseDate.setDate(baseDate.getDate() + dueDateFactor);      
     return baseDate;
   }
@@ -327,7 +343,10 @@ export class Boleto {
       [393, 'Banco Volkswagen S.A.'],
       [655, 'Banco Votorantim S.A.'],
       [610, 'Banco VR S.A.'],
-      [119, 'Banco Western Union do Brasil S.A.']
+      [119, 'Banco Western Union do Brasil S.A.'],
+      [748, 'Sicredi'],
+      [260, 'Banco Nu Pagamentos'],
+      [756, 'Banco Sicoob']
     ]);
   }
 
