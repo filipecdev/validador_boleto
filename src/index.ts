@@ -30,6 +30,12 @@ console.log("8", boleto.validate(), boleto.toJsonString(), boleto.getNearestDueD
 boleto = new Boleto('75691434021200001236420032960013610850000000333');
 console.log("9", boleto.validate(), boleto.toJsonString(), boleto.getNearestDueDate());
 
+boleto = new Boleto('75691317120103294520491224170018111390000093850');
+console.log("10", boleto.validate(), boleto.toJsonString(), boleto.getNearestDueDate());
+
+boleto = new Boleto('75691113900000938501317101032945209122417001');
+console.log("11", boleto.validate(), boleto.toJsonString(), boleto.getNearestDueDate());
+
 
 
 /*

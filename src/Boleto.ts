@@ -1,4 +1,4 @@
-export class Boleto {
+class Boleto {
 
   public initialCode: string;   
   public digitableLine: string;        // Linha digitável
@@ -19,9 +19,10 @@ export class Boleto {
   public segmentCode: string;          // Convenio: Código do Segmento
   public segmentName: string;          // Convenio: Nome do Seguimento
   public companyIdentifier: string;    // Convenio: Identificação da empresa, não possui padronização :C
-
-
-  constructor(initialCode: string) {
+  
+  
+  constructor(initialCode?: string) {
+    initialCode = initialCode || ""
     this.initialCode = (initialCode.match(/[0-9]/g) || []).join('')      
     this.digitableLine = "";
     this.barcode = ""; 
@@ -42,7 +43,7 @@ export class Boleto {
     this.segmentName = "";
     this.companyIdentifier = "";    
   }
-
+  
   public validate(): boolean {
     if (this.initialCode.length == 47){          // Linha digitavel boleto
       return this.validateBoletoDigitableLine();
@@ -55,7 +56,7 @@ export class Boleto {
         return this.validateBoletoBarcode(); 
       }
     } else {
-      this.errorMessage = "Tamanho do número não é compativel com nenhum documento previsto!";
+      this.errorMessage = "Tamanho do código não é compativel com nenhum documento previsto!";
       return false;
     }
   }
@@ -121,38 +122,34 @@ export class Boleto {
   private loadConvenioInfo(): void{    
     this.amount = this.getAmount(this.barcode.slice(4,15), this.digitableLine[2]);    
     this.segmentCode = this.digitableLine[1];
-    this.segmentName = this.getSegmentName(parseInt(this.segmentCode, 10));    
+    this.segmentName = this.getSegmentName(parseInt(this.segmentCode, 10));
     this.companyIdentifier = this.digitableLine.slice(15,44);   
   }
-
+  
   private validateBoletoDV(): boolean {
-    const checkDigit = parseInt(this.barcode[4], 10); // DV is at position 5 (index 4)
+    const checkDigit = parseInt(this.barcode[4], 10);
     const barcodeWithoutDV = this.barcode.slice(0, 4) + this.barcode.slice(5);
-    const calculatedDV = this.modulo11(barcodeWithoutDV);
 
-    if (checkDigit !== calculatedDV){
-      this.errorMessage = "Código de boleto inválido!";
+    if (!this.isValidModulo11CheckDigit(checkDigit, barcodeWithoutDV)){
+      this.errorMessage = "Código do tipo Boleto não possui dígitos verificadores válido!";
       return false;
     }    
   
     return true;
   }
-
+  
   private validateConvenioDV(): boolean{
-    const valueTypeDigit = parseInt(this.digitableLine[2], 10); // 3rd digit defines the module
+    const valueTypeDigit = parseInt(this.digitableLine[2], 10);
     const useModulo10 = valueTypeDigit === 6 || valueTypeDigit === 8;
 
     for (let i = 0; i < 4; i++) {
       const start = i * 12;
       const block = this.digitableLine.slice(start, start + 11);
-      const providedDV = parseInt(this.digitableLine[start + 11], 10);
+      const checkDigit = parseInt(this.digitableLine[start + 11], 10);
 
-      const calculatedDV = useModulo10
-        ? this.modulo10(block)
-        : this.modulo11(block);
-
-      if (providedDV !== calculatedDV) {
-        this.errorMessage = "Código de convênio inválido!";
+       if ((useModulo10 && !this.isValidModulo10CheckDigit(checkDigit, block))
+          || (!useModulo10 && !this.isValidModulo11CheckDigit(checkDigit, block))){
+        this.errorMessage = "Código do tipo Convênio não possui dígitos verificadores válido!";
         return false;
       }
     }
@@ -197,64 +194,100 @@ export class Boleto {
     return banks.get(bankCode) || "Código de banco não previsto!"
   }
 
-  private modulo10(numbers: string): number {
+  private calculateMOD10CheckDigit(number: string): number {
     let sum = 0;
     let weight = 2;
   
-    for (let i = numbers.length - 1; i >= 0; i--) {
-      const digit = parseInt(numbers[i], 10);
+    for (let i = number.length - 1; i >= 0; i--) {
+      const digit = parseInt(number[i], 10);
       let product = digit * weight;
-      if (product > 9) product -= 9;
+      if (product > 9) {
+        product = Math.floor(product / 10) + (product % 10);
+      }
       sum += product;
       weight = weight === 2 ? 1 : 2;
     }
   
     const remainder = sum % 10;
-    return remainder === 0 ? 0 : 10 - remainder;
-  }
+    let checkDigit = 10 - remainder
 
-  private modulo11(number: string): number {
-    const weights = [2, 3, 4, 5, 6, 7, 8, 9];
+    if (remainder === 0) {
+      checkDigit = 0
+    }
+
+    return checkDigit
+  }  
+
+  private calculateMOD11CheckDigit_febraban(number: string): number {
     let sum = 0;
-    let weightIndex = 0;
+    let weight = 2;
    
     for (let i = number.length - 1; i >= 0; i--) {
-        sum += parseInt(number[i]) * weights[weightIndex];
-        weightIndex = (weightIndex + 1) % weights.length;
+      sum += parseInt(number[i], 10) * weight;
+      weight = weight === 9 ? 2 : weight + 1;
     }
 
     const remainder = sum % 11;
     let checkDigit = 11 - remainder;
-    
-    if (checkDigit === 10 || checkDigit === 11) {
-        checkDigit = 0;
+ 
+    if (remainder === 0 || remainder === 1){
+      checkDigit = 0;
     }
 
     return checkDigit;
-}
+  }
 
+  private calculateMOD11CheckDigit_others(number: string): number {
+    let sum = 0;
+    let weight = 2;
+   
+    for (let i = number.length - 1; i >= 0; i--) {
+      sum += parseInt(number[i], 10) * weight;
+      weight = weight === 9 ? 2 : weight + 1;
+    }
+
+    const remainder = sum % 11;
+    let checkDigit = 11 - remainder;
+
+    if (checkDigit === 0 || checkDigit === 10){
+      checkDigit = 1
+    }
+
+    return checkDigit;
+  }
+
+  private isValidModulo10CheckDigit(checkDigit: number, referenceNumber: string): boolean {  
+    const calculatedCheckDigit = this.calculateMOD10CheckDigit(referenceNumber)
+    return (checkDigit === calculatedCheckDigit)
+  }
+
+  private isValidModulo11CheckDigit(checkDigit: number, referenceNumber: string): boolean {
+    const calculatedCheckDigit_febraban = this.calculateMOD11CheckDigit_febraban(referenceNumber)
+    const calculatedCheckDigit_others = this.calculateMOD11CheckDigit_others(referenceNumber)
+    return (checkDigit === calculatedCheckDigit_febraban || checkDigit === calculatedCheckDigit_others )
+  }
+  
   private generateBoletoDigitableLine(barcode: string): string {
     const field1 = barcode.slice(0, 4) + barcode.slice(19, 24);
-    const checkDigit1 = this.modulo10(field1).toString();  
+    const checkDigit1 = this.calculateMOD10CheckDigit(field1).toString();  
     const field2 = barcode.slice(24, 34);
-    const checkDigit2 = this.modulo10(field2).toString();  
+    const checkDigit2 = this.calculateMOD10CheckDigit(field2).toString();  
     const field3 = barcode.slice(34, 44);
-    const checkDigit3 = this.modulo10(field3).toString();  
+    const checkDigit3 = this.calculateMOD10CheckDigit(field3).toString();  
     const field4 = barcode.slice(4, 5); 
     const field5 = barcode.slice(5, 19);   
     return field1 + checkDigit1 + field2 + checkDigit2 + field3 + checkDigit3 + field4 + field5;
   }
 
-
   private generateConvenioDigitableLine(barcode: string): string {    
     const field1 = barcode.slice(0, 11);
-    const checkDigit1 = this.modulo10(field1).toString();
+    const checkDigit1 = this.calculateMOD10CheckDigit(field1).toString();
     const field2 = barcode.slice(11, 22);
-    const checkDigit2 = this.modulo10(field2).toString();
+    const checkDigit2 = this.calculateMOD10CheckDigit(field2).toString();
     const field3 = barcode.slice(22, 33);
-    const checkDigit3 = this.modulo10(field3).toString();
+    const checkDigit3 = this.calculateMOD10CheckDigit(field3).toString();
     const field4 = barcode.slice(33, 44);
-    const checkDigit4 = this.modulo10(field4).toString(); 
+    const checkDigit4 = this.calculateMOD10CheckDigit(field4).toString(); 
     return field1 + checkDigit1 + field2 + checkDigit2 + field3 + checkDigit3 + field4 + checkDigit4;
   }
 
@@ -266,7 +299,7 @@ export class Boleto {
     const dueDateAndAmount = digitableLine.slice(33);
     return bank + currencyCode + generalDV + dueDateAndAmount + additionalField;
   }
-
+  
   private generateConvenioBarcode(digitableLine: string): string {   
     const field1 = digitableLine.slice(0, 11);   
     const field2 = digitableLine.slice(12, 23);  
@@ -275,10 +308,10 @@ export class Boleto {
     return field1 + field2 + field3 + field4;
   }
 
-  public toJsonString(): string {
+  public toJsonString(): string { // debug
     return JSON.stringify(this);
   }
-
+  
   private getCollectionSegmentMap(): Map<number, string> {
     return new Map<number, string>([
       [1, "Prefeituras"],
@@ -291,7 +324,7 @@ export class Boleto {
       [9, "Outros"]
     ]);
   }
-
+  
   private getBankCodesMap(): Map<number, string> {
     return new Map<number, string>([
       [1, 'Banco do Brasil S.A.'],
@@ -349,5 +382,8 @@ export class Boleto {
       [756, 'Banco Sicoob']
     ]);
   }
-
+  
 }
+
+export {Boleto}
+  
