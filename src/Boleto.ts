@@ -249,7 +249,7 @@ class Boleto {
     const remainder = sum % 11;
     let checkDigit = 11 - remainder;
 
-    if (checkDigit === 0 || checkDigit === 10){
+    if (checkDigit === 0 || checkDigit === 10 || checkDigit === 11){
       checkDigit = 1
     }
 
